@@ -11,6 +11,7 @@ from ..helpers.path import find_project_root
 import time
 import hashlib
 
+
 class AirtableConnector(BaseConnector):
     """
     Airtable connector to retrieving record data.
@@ -19,22 +20,23 @@ class AirtableConnector(BaseConnector):
     def __init__(
         self,
         config: Optional[Union[AirtableConnectorConfig, dict]] = None,
-        cache_interval : int = 600
+        cache_interval: int = 600,
     ):
-
         if isinstance(config, dict):
-            if config['api_key'] and config["base_id"] and config["table"]:
+            if config["api_key"] and config["base_id"] and config["table"]:
                 config = AirtableConnectorConfig(**config)
-            
-        elif not config :
-            airtable_env_vars = {
-                "api_key" : "AIRTABLE_API_TOKEN",
-                "base_id" : "AIRTABLE_BASE_ID",
-                "table" : "AIRTABLE_TABLE_NAME"
-            }
-            config = AirtableConnectorConfig(**self._populate_config_from_env(config, airtable_env_vars))
 
-        self._root_url :str = "https://api.airtable.com/v0/"
+        elif not config:
+            airtable_env_vars = {
+                "api_key": "AIRTABLE_API_TOKEN",
+                "base_id": "AIRTABLE_BASE_ID",
+                "table": "AIRTABLE_TABLE_NAME",
+            }
+            config = AirtableConnectorConfig(
+                **self._populate_config_from_env(config, airtable_env_vars)
+            )
+
+        self._root_url: str = "https://api.airtable.com/v0/"
         self._cache_interval = cache_interval
 
         super().__init__(config)
@@ -45,59 +47,63 @@ class AirtableConnector(BaseConnector):
         """
         config = config.dict()
         url = f"{self._root_url}{config['base_id']}/{config['table']}"
-        response = requests.head(url=url,headers={"Authorization": f"Bearer {config['api_key']}"})
-        if response.status_code == 200 :
-            self.logger.log(f"""
+        response = requests.head(
+            url=url, headers={"Authorization": f"Bearer {config['api_key']}"}
+        )
+        if response.status_code == 200:
+            self.logger.log(
+                """
                 Connected to Airtable.
-            """)
-        else :
+            """
+            )
+        else:
             raise ValueError(
                 f"""Failed to connect to Airtable. 
                     Status code: {response.status_code}, 
                     message: {response.text}"""
             )
-        
-    def _get_cache_path(self,include_additional_filters : bool):
+
+    def _get_cache_path(self, include_additional_filters: bool):
         """
         Return the path of the cache file.
 
         Returns :
             str : The path of the cache file.
         """
-        cache_dir = os.path.join(os.getcwd(),"")
-        try :
-            cache_dir = os.path.join((find_project_root()),"cache")
+        cache_dir = os.path.join(os.getcwd(), "")
+        try:
+            cache_dir = os.path.join((find_project_root()), "cache")
         except ValueError:
-            cache_dir = os.path.join(os.getcwd(),"cache")
-        return os.path.join(cache_dir,f"{self._config.table}_data.parquet")
-    
+            cache_dir = os.path.join(os.getcwd(), "cache")
+        return os.path.join(cache_dir, f"{self._config.table}_data.parquet")
+
     def _cached(self):
         """
         Returns the cached Airtable data if it exists and
         is not older than the cache interval.
 
         Returns :
-            DataFrame | None : The cached data if 
+            DataFrame | None : The cached data if
                 it exists and is not older than the cache
-                interval, None otherwise. 
+                interval, None otherwise.
         """
         cache_path = self._get_cache_path()
         if not os.path.exists(cache_path):
             return None
-        
-        #If the file is older than 1 day , delete it.
+
+        # If the file is older than 1 day , delete it.
         if os.path.getmtime(cache_path) < time.time() - self._cache_interval:
             if self.logger:
                 self.logger.log(f"Deleting expired cached data from {cache_path}")
             os.remove(cache_path)
             return None
-        
-        if self.logger :
+
+        if self.logger:
             self.logger.log(f"Loading cached data from {cache_path}")
 
         return cache_path
-    
-    def _save_cache(self,df):
+
+    def _save_cache(self, df):
         """
         Save the given DataFrame to the cache.
 
@@ -109,7 +115,7 @@ class AirtableConnector(BaseConnector):
             and len(self._additional_filters) > 0
         )
         df.to_parquet(filename)
-    
+
     @property
     def fallback_name(self):
         """
@@ -128,25 +134,29 @@ class AirtableConnector(BaseConnector):
             DataFrameType: The result of the connector.
         """
         url = f"{self._root_url}{self._config.base_id}/{self._config.table}"
-        response = requests.get(url=url,headers={"Authorization": f"Bearer {self._config.api_key}"})
-        if response.status_code == 200 :
-            data =  response.json()
+        response = requests.get(
+            url=url, headers={"Authorization": f"Bearer {self._config.api_key}"}
+        )
+        if response.status_code == 200:
+            data = response.json()
             data = self.preprocess(data=data)
             self._save_cache(data)
-        else :
+        else:
             raise ValueError(
                 f"""Failed to connect to Airtable. 
                     Status code: {response.status_code}, 
                     message: {response.text}"""
             )
         return data
-    
-    def preprocess(self,data):
+
+    def preprocess(self, data):
         """
-        Preprocesses Json response data 
+        Preprocesses Json response data
         To prepare dataframe correctly.
         """
-        records = [{"id": record["id"], **record["fields"]} for record in data["records"]]
+        records = [
+            {"id": record["id"], **record["fields"]} for record in data["records"]
+        ]
         return pd.DataFrame(records)
 
     def head(self):
@@ -159,11 +169,13 @@ class AirtableConnector(BaseConnector):
                  that the conector is connected to .
         """
         url = f"{self._root_url}{self._config.base_id}/{self._config.table}"
-        response = requests.get(url=url,headers={"Authorization": f"Bearer {self._config.api_key}"})
-        if response.status_code == 200 :
-            data =  response.json()
+        response = requests.get(
+            url=url, headers={"Authorization": f"Bearer {self._config.api_key}"}
+        )
+        if response.status_code == 200:
+            data = response.json()
             data = self.preprocess(data=data)
-        else :
+        else:
             raise ValueError(
                 f"""Failed to connect to Airtable. 
                     Status code: {response.status_code}, 
@@ -171,7 +183,7 @@ class AirtableConnector(BaseConnector):
             )
 
         return data.head()
-    
+
     @property
     def rows_count(self):
         """
@@ -184,7 +196,7 @@ class AirtableConnector(BaseConnector):
         """
         data = self.execute()
         return len(data)
-    
+
     @property
     def columns_count(self):
         """
@@ -197,7 +209,7 @@ class AirtableConnector(BaseConnector):
         """
         data = self.execute()
         return len(data.columns)
-    
+
     @property
     def column_hash(self):
         """
