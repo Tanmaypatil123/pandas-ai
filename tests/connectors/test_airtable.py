@@ -1,41 +1,96 @@
 import unittest
-import pandas 
-from unittest.mock import Mock, patch
-from pandasai.connectors.base import AirtableConnectorConfig
 from pandasai.connectors import AirtableConnector
-import requests
+from pandasai.connectors.base import AirtableConnectorConfig
+import pandas as pd
+from unittest.mock import Mock,patch
+import json
 
 class TestAirTableConnector(unittest.TestCase):
-    def setUp(self):
-
+    def setUp(self) -> None:
         # Define your ConnectorConfig instance here
         self.config = AirtableConnectorConfig(
-            token="your_token",
-            baseID="your_baseid",
-            table="your_table_name"
+            api_key="your_token",
+            base_id="your_baseid",
+            table="your_table_name",
         ).dict()
-
+        self.root_url = "https://api.airtable.com/v0/"
+        self.expected_data_json = '''
+            {
+                "records": [
+                    {
+                        "id": "recnAIoHRTmpecLgY",
+                        "createdTime": "2023-10-09T13:04:58.000Z",
+                        "fields": {
+                            "Name": "Quarterly launch",
+                            "Status": "Done"
+                        }
+                    },
+                    {
+                        "id": "recmRf57B2p3F9j8o",
+                        "createdTime": "2023-10-09T13:04:58.000Z",
+                        "fields": {
+                            "Name": "Customer research",
+                            "Status": "In progress"
+                        }
+                    },
+                    {
+                        "id": "recsxnHUagIce7nB2",
+                        "createdTime": "2023-10-09T13:04:58.000Z",
+                        "fields": {
+                            "Name": "Campaign analysis",
+                            "Status": "To do"
+                        }
+                    }
+                ],
+                "offset": "itrowYGFfoBEIob3C/recsxnHUagIce7nB2"
+            }
+            '''
         #Create an instance of Connector 
         self.connector = AirtableConnector(config=self.config)
 
-    @patch("requests.Session")
-    def test_constructor_and_properties(self,mock_request_session):
-        # Test constructor and properties
+    def test_constructor_and_properties(self):
         self.assertEqual(self.connector._config,self.config)
-        self.assertEqual(self.connector._session,mock_request_session)
-        self.assertEqual(self.connector._session.headers, {
-            "Authorization" : f"Bearer {self.config['token']}"
-        })
-
-    @patch("pandas.DataFrame")
-    def test_connect_load(self,mock_dataframe):
-        self.connector._connect_load(self.config)
-        self.assertEqual(type(self.connector._response),mock_dataframe())
+        self.assertEqual(self.connector._root_url,self.root_url)
+        self.assertEqual(self.connector._cache_interval,600)
     
-    @patch("pandas.DataFrame")
-    def test_head(self,mock_dataframe):
-        response = self.connector.head()
-        self.assertEqual(type(response),mock_dataframe())
-        self.assertEqual(len(response),5)
+    def test_fallback_name(self):
+        self.assertEqual(self.connector.fallback_name,self.config["table"])
+
+    @patch("requests.get")
+    def test_execute(self,mock_request_get):
         
+        mock_request_get.return_value.json.return_value = json.loads(self.expected_data_json)
+        mock_request_get.return_value.status_code = 200
+        execute_data = self.connector.execute()
+        self.assertEqual(type(execute_data),pd.DataFrame)
+        self.assertEqual(len(execute_data),3)
+    
+    @patch("requests.get")
+    def test_head(self,mock_request_get):
         
+        mock_request_get.return_value.json.return_value = json.loads(self.expected_data_json)
+        mock_request_get.return_value.status_code = 200
+        execute_data = self.connector.head()
+        self.assertEqual(type(execute_data),pd.DataFrame)
+        self.assertLessEqual(len(execute_data),5)
+    
+    def test_fallback_name_property(self):
+        # Test fallback_name property
+        fallback_name = self.connector.fallback_name
+        self.assertEqual(fallback_name, self.config['table'])
+
+    @patch("requests.get")
+    def test_rows_count_property(self,mock_request_get):
+        # Test rows_count property 
+        mock_request_get.return_value.json.return_value = json.loads(self.expected_data_json)
+        mock_request_get.return_value.status_code = 200
+        rows_count = self.connector.rows_count
+        self.assertEqual(rows_count,3)
+    
+    @patch("requests.get")
+    def test_columns_count_property(self,mock_request_get):
+        # Test columns_count property
+        mock_request_get.return_value.json.return_value = json.loads(self.expected_data_json)
+        mock_request_get.return_value.status_code = 200
+        rows_count = self.connector.columns_count
+        self.assertEqual(rows_count,3)  

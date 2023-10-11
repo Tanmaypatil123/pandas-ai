@@ -21,7 +21,7 @@ databricks_connector = DatabricksConnector(
     }
 )
 
-llm = OpenAI("OPEN_API_KEY")
+llm = OpenAI("OPENAI_API_KEY")
 df = SmartDataframe(databricks_connector, config={"llm": llm})
 
 response = df.chat("How many people from the United states?")
